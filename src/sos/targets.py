@@ -6,9 +6,12 @@
 import os
 import pickle
 import shlex
+import sqlite3
 import shutil
 import subprocess
 import sys
+from collections import namedtuple
+
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from pathlib import Path
@@ -105,8 +108,73 @@ def fileMD5(filename, partial=True):
     return md5.hexdigest()
 
 
+class SignatureStore:
+    TargetSig = namedtuple('TargetSig', 'size mtime md5')
+
+    def __init__(self, local=True):
+        self.db_file = os.path.join(env.exec_dir if local else
+                                    os.path.expanduser('~'), '.sos', 'signatures.db')
+        self.lock_file = self.db_file + '_'
+        if not os.path.isfile(self.db_file):
+            conn = sqlite3.connect(self.db_file)
+            cur = conn.cursor()
+            cur.execute('''CREATE TABLE SIGNATURE (
+                target text PRIMARY KEY,
+                mtime FLOAT,
+                size INTEGER,
+                md5 text NOT NULL
+                )''')
+            conn.commit()
+            conn.close()
+
+    def has(self, target):
+        with fasteners.InterProcessLock(self.lock_file):
+            conn = sqlite3.connect(self.db_file)
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT signature FROM SIGNATURE WHERE target=? ', (target,))
+            res = cur.fetchone()
+            return bool(res)
+            conn.close()
+
+    def get(self, target):
+        with fasteners.InterProcessLock(self.lock_file):
+            conn = sqlite3.connect(self.db_file)
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT mtime, size, signature FROM SIGNATURE WHERE target=? ', (target.target_name(),))
+            res = cur.fetchone()
+            res = self.TargetSig._make(res[0] if res else (0, 0, ''))
+            env.logger.error(f'get {target} {res}')
+            return res
+            conn.close()
+
+    def set(self, target, signature):
+        env.logger.error(f'set {target} {signature}')
+        with fasteners.InterProcessLock(self.lock_file):
+            conn = sqlite3.connect(self.db_file)
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT OR REPLACE INTO SIGNATURE VALUES (?, ?, ? )',
+                (target.target_name(), *signature))
+            conn.commit()
+            conn.close()
+
+    def rempve(self, target):
+        with fasteners.InterProcessLock(self.lock_file):
+            conn = sqlite3.connect(self.db_file)
+            cur = conn.cursor()
+            cur.execute(
+                'DELETE FROM SIGNATURE WHERE signature=?', (target.target_name(),))
+            conn.commit()
+            conn.close()
+
+
+sig_store = SignatureStore(True)
+
+
 class BaseTarget(object):
-    '''A base class for all targets (e.g. a file)'''
+    '''A base class for all targets(e.g. a file)'''
 
     def __init__(self, *args):
         self._sigfile = None
@@ -134,22 +202,12 @@ class BaseTarget(object):
     # -----------------------------------------------------
     # derived functions that do not need to be redefined
     #
-
-    def sig_file(self):
-        if self._sigfile is None:
-            self._sigfile = Path(env.exec_dir) / '.sos' / '.runtime' /  \
-                f'{self.__class__.__name__}_{textMD5(self.target_name())}.file_info'
-        return self._sigfile
-
     def remove_sig(self):
-        if self.sig_file() and self.sig_file().is_file():
-            self.sig_file().unlink()
+        sig_store.remove(self)
 
     def write_sig(self):
         '''Write .sig file with signature'''
-        # path to file
-        with open(self.sig_file(), 'w') as sig:
-            sig.write(f'{self.target_name()}\t{self.target_signature()}\n')
+        sig_store.set(self, self.target_signature())
 
     def __repr__(self):
         return f'{self.__class__.__name__}("{self.target_name()}")'
@@ -362,7 +420,7 @@ class executable(BaseTarget):
                 return False
             else:
                 return True
-        if mode in ('any', 'signature') and os.path.isfile(self.sig_file()):
+        if mode in ('any', 'signature') and sig_store.has(self):
             return True
         return False
 
@@ -525,7 +583,7 @@ class file_target(path, BaseTarget):
                 return True
             elif mode == 'any' and (self + '.zapped').exists():
                 return True
-            elif mode == 'signature' and self.sig_file().exists():
+            elif mode == 'signature' and sig_store.has(self):
                 return True
             return False
         except Exception as e:
@@ -538,35 +596,14 @@ class file_target(path, BaseTarget):
     def __fspath__(self):
         return super(file_target, self).__fspath__()
 
-    def sig_file(self):
-        if self._sigfile is not None:
-            return self._sigfile
-        # If the output path is outside of the current working directory
-        fullname = str(self.resolve())
-        name_md5 = textMD5(fullname)
-
-        if self.is_external():
-            self._sigfile = path('~') / '.sos' / \
-                '.runtime' / name_md5 + '.file_info'
-        else:
-            self._sigfile = path(env.exec_dir) / '.sos' / \
-                '.runtime' / name_md5 + '.file_info'
-        return self._sigfile
-
     def target_signature(self, mode='any'):
         '''Return file signature'''
         if mode == 'target':
             self._md5 = fileMD5(self)
         if self._md5 is not None:
             return self._md5
-        if self.sig_file().is_file() and (not self.is_file() or os.path.getmtime(self.sig_file()) > os.path.getmtime(self)):
-            with open(self.sig_file()) as md5:
-                try:
-                    line = md5.readline()
-                    _, _, _, m = line.rsplit('\t', 3)
-                    return m.strip()
-                except Exception:
-                    pass
+        if sig_store.has(self):
+            return sig_store.get(self).md5
         elif (self + '.zapped').is_file():
             with open(self + '.zapped') as md5:
                 try:
@@ -588,17 +625,14 @@ class file_target(path, BaseTarget):
     def remove(self, mode='both'):
         if mode in ('both', 'target') and self.is_file():
             self.unlink()
-        if mode in ('both', 'signature') and self.sig_file().is_file():
-            self.sig_file().unlink()
+        if mode in ('both', 'signature'):
+            sig_store.remove(self)
 
     def size(self):
         if self.exists():
             return os.path.getsize(self)
-        elif self.sig_file().is_file():
-            with open(self.sig_file()) as md5:
-                line = md5.readline()
-                _, _, s, _ = line.rsplit('\t', 3)
-                return int(s.strip())
+        elif sig_store.has(self):
+            return sig_store.get(self).size
         elif (self + '.zapped').is_file():
             with open(self + '.zapped') as md5:
                 line = md5.readline()
@@ -610,11 +644,8 @@ class file_target(path, BaseTarget):
     def mtime(self):
         if self.exists():
             return os.path.getmtime(self)
-        elif self.sig_file().is_file():
-            with open(self.sig_file()) as md5:
-                line = md5.readline()
-                _, t, _, _ = line.rsplit('\t', 3)
-                return t.strip()
+        elif sig_store.has(self):
+            return sig_store.get(self).mtime
         elif (self + '.zapped').is_file():
             with open(self + '.zapped') as md5:
                 line = md5.readline()
@@ -627,27 +658,22 @@ class file_target(path, BaseTarget):
         '''Write .file_info file with signature'''
         # path to file
         if not self.exists() and (self + '.zapped').exists():
-            shutil.copy(self + '.zapped', self.sig_file())
+            with open(self + '.zapped') as zapped:
+                line = zapped.readline()
+                _, mtime, size, md5 = line.rsplit('\t', 3)
+                sig_store.set(self, (mtime, size, md5))
             return
-        with open(self.sig_file(), 'w') as md5:
-            md5.write(
-                f'{self.fullname()}\t{os.path.getmtime(self)}\t{os.path.getsize(self)}\t{self.target_signature()}\n')
-            for f in self._attachments:
-                md5.write(
-                    f'{f}\t{os.path.getmtime(f)}\t{os.path.getsize(f)}\t{fileMD5(f)}\n')
+        sig_store.set(self, (os.path.getmtime(self),
+                             os.path.getsize(self), self.target_signature()))
 
     def validate(self):
         '''Check if file matches its signature'''
-        if not self.sig_file().is_file():
+        if not sig_store.has(self):
             return False
-        with open(self.sig_file()) as md5:
-            for line in md5:
-                f, _, _, m = line.rsplit('\t', 3)
-                if not os.path.isfile(f):
-                    return False
-                if fileMD5(f) != m.strip():
-                    env.logger.debug(f'MD5 mismatch {f}')
-                    return False
+        sig = sig_store.get(self).md5
+        if fileMD5(self) != sig:
+            env.logger.debug(f'MD5 mismatch {f}')
+            return False
         return True
 
     def __hash__(self):
@@ -858,13 +884,6 @@ class sos_targets(BaseTarget, Sequence, os.PathLike):
 
     def __eq__(self, other):
         return self._targets == other._targets if isinstance(other, sos_targets) else other
-
-    def sig_file(self):
-        if len(self._targets) == 1:
-            return self._targets[0].sig_file()
-        else:
-            raise ValueError(
-                f'Cannot get sig_file for group of targets {self}')
 
     def __add__(self, part):
         if len(self._targets) == 1:
