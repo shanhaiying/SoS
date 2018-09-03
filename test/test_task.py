@@ -472,7 +472,7 @@ run: expand=True
             if file_target(f).exists():
                 file_target(f).unlink()
         script = SoS_Script('''
-[10: shared = {'a': 'a[0]'}]
+[10: shared = 'a']
 task: shared={'a': 'int(open("a.txt").read())'}
 run:
   echo 100 > a.txt
@@ -491,7 +491,7 @@ run: expand=True
             if file_target(f).exists():
                 file_target(f).unlink()
         script = SoS_Script('''
-[10: shared = {'a': 'a[0]', 'b':'b[0]'}]
+[10: shared = ['a', 'b']]
 task: shared=[{'a': 'int(open("a.txt").read())'}, 'b']
 b = 20
 run:
