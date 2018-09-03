@@ -575,9 +575,10 @@ def parse_shared_vars(option):
                     shared_vars |= accessed_vars(val)
     return shared_vars
 
-def evaluate_shared(option):
+def evaluate_shared(vars, option):
     # handle option shared and store variables in a "__shared_vars" variable
     shared_vars = {}
+    env.sos_dict.quick_update(vars[-1])
     if isinstance(option, str):
         if option in env.sos_dict:
             shared_vars[option] = env.sos_dict[option]
@@ -1293,8 +1294,7 @@ class Base_Step_Executor:
         result['__changed_vars__'] = set()
         result['__shared__'] = {}
         if 'shared' in self.step.options:
-            env.sos_dict.quick_update(self.shared_vars[-1])
-            result['__shared__'] = evaluate_shared(self.step.options['shared'])
+            result['__shared__'] = self.shared_vars
         if hasattr(env, 'accessed_vars'):
             result['__environ_vars__'] = self.environ_vars
             result['__signature_vars__'] = env.accessed_vars
@@ -1739,6 +1739,10 @@ class Base_Step_Executor:
                     if res['ret_code'] == 0:
                         pending_signatures[idx].write()
 
+            # if there exists an option shared, the variable would be treated as
+            # provides=sos_variable(), and then as step_output
+            self.shared_vars = evaluate_shared(self.shared_vars, self.step.options['shared'])
+            env.sos_dict.quick_update(self.shared_vars)
             self.log('output')
             self.verify_output()
             substeps = self.completed['__substep_completed__'] + \
