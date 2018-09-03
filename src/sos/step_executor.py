@@ -1639,7 +1639,7 @@ class Base_Step_Executor:
                     if matched:
                         if env.sos_dict['step_output'].undetermined():
                             self.output_groups[env.sos_dict['_index']] = matched["output"]
-                        self.shared_vars[env.sos_dict['_index']] = matched["shared"]
+                        self.shared_vars[env.sos_dict['_index']] = matched["vars"]
                     pending_signatures[idx] = sig
 
                 # if this index is skipped, go directly to the next one
