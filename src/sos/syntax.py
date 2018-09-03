@@ -18,7 +18,7 @@ SOS_ACTION_OPTIONS = ['workdir', 'container', 'docker_image', 'docker_file', 'ac
                       'allow_error', 'tracked', 'stdout', 'stderr', 'default_env', 'env']
 
 SOS_DIRECTIVES = ['input', 'output', 'depends', 'task', 'parameter']
-SOS_SECTION_OPTIONS = ['skip', 'provides', 'shared', 'substep_shared', 'workdir']
+SOS_SECTION_OPTIONS = ['skip', 'provides', 'shared', 'workdir']
 
 SOS_KEYWORDS = SOS_INPUT_OPTIONS + SOS_OUTPUT_OPTIONS + SOS_DEPENDS_OPTIONS + SOS_RUNTIME_OPTIONS \
     + SOS_ACTION_OPTIONS + SOS_DIRECTIVES + SOS_SECTION_OPTIONS

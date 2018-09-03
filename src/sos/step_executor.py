@@ -21,7 +21,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import psutil
 from billiard import Pool
 
-from .eval import SoS_eval, SoS_exec, stmtHash
+from .eval import SoS_eval, SoS_exec, stmtHash, accessed_vars
+
 from .parser import SoS_Step
 from .pattern import extract_pattern
 from .signatures import workflow_signatures
@@ -48,7 +49,6 @@ def analyze_section(section: SoS_Step, default_input: Optional[sos_targets] = No
     it uses, and input, output, etc.'''
     from .workflow_executor import __null_func__
     from ._version import __version__
-    from .eval import accessed_vars
 
     # these are the information we need to build a DAG, by default
     # input and output and undetermined, and there are no variables.
@@ -422,7 +422,7 @@ def concurrent_execute(stmt, proc_vars={}, step_md5=None, step_tokens=[],
             if matched:
                 # avoid sig being released in the final statement
                 sig = None
-                return {'ret_code': 0, 'sig_skipped': 1, 'output': matched['output'], 'shared': matched['shared']}
+                return {'ret_code': 0, 'sig_skipped': 1, 'output': matched['output'], 'shared': matched['vars']}
             sig.lock()
         verify_input()
 
@@ -446,7 +446,7 @@ def concurrent_execute(stmt, proc_vars={}, step_md5=None, step_tokens=[],
         if sig:
             sig.set_output(env.sos_dict['_output'])
             sig.write()
-        res = {'ret_code': 0, 'output': sig.content['output'], 'shared': sig.content['shared']}
+        res = {'ret_code': 0, 'output': sig.content['output'], 'shared': sig.content['end_context']}
         if capture_output:
             res.update({'stdout': outmsg, 'stderr': errmsg})
         return res
@@ -565,7 +565,7 @@ def parse_shared_vars(option):
     elif isinstance(option, Sequence):
         for item in option:
             if isinstance(item, str):
-                shared_vars.add(option)
+                shared_vars.add(item)
             elif isinstance(item, Mapping):
                 for var, val in item.items():
                     shared_vars |= accessed_vars(val)
@@ -594,8 +594,8 @@ def evaluate_shared(option):
     elif isinstance(option, Sequence):
         for item in option:
             if isinstance(item, str):
-                if option in env.sos_dict:
-                    shared_vars[option] = env.sos_dict[option]
+                if item in env.sos_dict:
+                    shared_vars[item] = env.sos_dict[item]
                 else:
                     raise RuntimeError(f'shared variable does not exist: {option}')
             elif isinstance(item, Mapping):
@@ -1289,10 +1289,8 @@ class Base_Step_Executor:
         result['__changed_vars__'] = set()
         result['__shared__'] = {}
         if 'shared' in self.step.options:
-            result['__shared__'] = self.shared_vars[-1]
-        if 'substep_shared' in self.step.options:
-            for key in self.shared_vars[-1]:
-                result['__shared__'][key] = [x.get(key, None) for x in self.shared_vars]
+            env.sos_dict.quick_update(self.shared_vars[-1])
+            result['__shared__'] = evaluate_shared(self.step.options['shared'])
         if hasattr(env, 'accessed_vars'):
             result['__environ_vars__'] = self.environ_vars
             result['__signature_vars__'] = env.accessed_vars
@@ -1423,11 +1421,9 @@ class Base_Step_Executor:
             input_statement_idx = 0
 
         self.proc_results = []
-        self.vars_to_be_shared = {}
+        self.vars_to_be_shared = set()
         if 'shared' in self.step.options:
             self.vars_to_be_shared |= parse_shared_vars(self.step.options['shared'])
-        if 'substep_shared' in self.step.options:
-            self.vars_to_be_shared |= parse_shared_vars(self.step.options['substep_shared'])
         self.vars_to_be_shared = sorted(list(self.vars_to_be_shared))
         self.shared_vars = [{} for x in self._substeps]
         # run steps after input statement, which will be run multiple times for each input
@@ -1587,7 +1583,8 @@ class Base_Step_Executor:
                                     if matched:
                                         if env.sos_dict['step_output'].undetermined():
                                             self.output_groups[env.sos_dict['_index']] = matched["output"]
-                                        self.shared_vars[env.sos_dict['_index']] = matched["shared"]
+                                        if 'shared' in matched:
+                                            self.shared_vars[env.sos_dict['_index']] = matched["shared"]
                                     else:
                                         sig.lock()
                                         try:
@@ -1605,8 +1602,13 @@ class Base_Step_Executor:
                                                 sig.write()
                                             else:
                                                 pending_signatures[idx] = sig
+                                            if 'shared' in self.step.options:
+                                                try:
+                                                    self.shared_vars[env.sos_dict['_index']] = {
+                                                        x:env.sos_dict[x] for x in self.vars_to_be_shared}
+                                                except Exception as e:
+                                                    raise ValueError(f'Missing shared variable {e}.')
                                             sig.release()
-
                         except StopInputGroup as e:
                             self.output_groups[idx] = []
                             if e.message:
