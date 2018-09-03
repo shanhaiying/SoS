@@ -507,6 +507,23 @@ run: expand=True
         Base_Executor(wf, config={'sig_mode': 'force'}).run()
         self.assertTrue(os.path.isfile("a100_20.txt"))
 
+        script = SoS_Script('''
+[10 (simulate): shared='rng']
+input: for_each={'i': range(5)}
+task: shared='rng'
+print(f"{i}")
+import random
+rng = random.randint(1, 1000)
+''')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+        var = env.sos_dict['rng']
+        self.assertTrue(isinstance(var, int))
+        # run it again, should get from signature
+        Base_Executor(wf).run()
+        self.assertEqual(var, env.sos_dict['rng'])
+
+
     @unittest.skipIf(test_interactive, 'Interactive mode handles tasks differently')
     def testTrunkSizeOption(self):
         '''Test option trunk_size'''
