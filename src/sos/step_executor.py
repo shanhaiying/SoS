@@ -1741,8 +1741,9 @@ class Base_Step_Executor:
 
             # if there exists an option shared, the variable would be treated as
             # provides=sos_variable(), and then as step_output
-            self.shared_vars = evaluate_shared(self.shared_vars, self.step.options['shared'])
-            env.sos_dict.quick_update(self.shared_vars)
+            if 'shared' in self.step.options:
+                self.shared_vars = evaluate_shared(self.shared_vars, self.step.options['shared'])
+                env.sos_dict.quick_update(self.shared_vars)
             self.log('output')
             self.verify_output()
             substeps = self.completed['__substep_completed__'] + \
