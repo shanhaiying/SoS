@@ -473,6 +473,7 @@ run: expand=True
                 file_target(f).unlink()
         script = SoS_Script('''
 [10: shared = 'a']
+output: 'a.txt'
 task: shared={'a': 'int(open("a.txt").read())'}
 run:
   echo 100 > a.txt
@@ -492,6 +493,7 @@ run: expand=True
                 file_target(f).unlink()
         script = SoS_Script('''
 [10: shared = ['a', 'b']]
+output: 'a.txt'
 task: shared=[{'a': 'int(open("a.txt").read())'}, 'b']
 b = 20
 run:
