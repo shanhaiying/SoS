@@ -1428,7 +1428,7 @@ class Base_Step_Executor:
         self.vars_to_be_shared = set()
         if 'shared' in self.step.options:
             self.vars_to_be_shared |= parse_shared_vars(self.step.options['shared'])
-        self.vars_to_be_shared = sorted(list(self.vars_to_be_shared))
+        self.vars_to_be_shared = sorted(list(self.vars_to_be_shared - {'step_output', 'step_input', 'step_depends'}))
         self.shared_vars = [{} for x in self._substeps]
         # run steps after input statement, which will be run multiple times for each input
         # group.
@@ -1723,15 +1723,14 @@ class Base_Step_Executor:
                 if 'exception' in proc_result:
                     raise proc_result['exception']
             # if output is Undetermined, re-evalulate it
-            if env.config['run_mode'] != 'dryrun':
-                # finalize output from output_groups because some output might be skipped
-                # this is the final version of the output but we do maintain output
-                # during the execution of step, for compatibility.
-                env.sos_dict.set(
-                    'step_output', sos_targets(self.output_groups[0]))
-                for og in self.output_groups[1:]:
-                    env.sos_dict['step_output'].extend(og)
-                env.sos_dict['step_output'].dedup()
+            # finalize output from output_groups because some output might be skipped
+            # this is the final version of the output but we do maintain output
+            # during the execution of step, for compatibility.
+            env.sos_dict.set(
+                'step_output', sos_targets(self.output_groups[0]))
+            for og in self.output_groups[1:]:
+                env.sos_dict['step_output'].extend(og)
+            env.sos_dict['step_output'].dedup()
 
             # now that output is settled, we can write remaining signatures
             for idx, res in enumerate(self.proc_results):
