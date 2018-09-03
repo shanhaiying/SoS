@@ -24,7 +24,7 @@ def collect_task_result(task_id, sos_dict, skipped=False, signature=None):
     if 'shared' in env.sos_dict['_runtime']:
         svars = env.sos_dict['_runtime']['shared']
         if isinstance(svars, str):
-            if vars not in env.sos_dict:
+            if svars not in env.sos_dict:
                 raise ValueError(
                     f'Unavailable shared variable {svars} after the completion of task {task_id}')
             if not pickleable(env.sos_dict[svars], svars):
