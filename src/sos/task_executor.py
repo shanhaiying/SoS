@@ -17,7 +17,7 @@ from .targets import (InMemorySignature, UnknownTarget, file_target,
                       remote, sos_step, sos_targets)
 from .utils import StopInputGroup, env, short_repr, pickleable
 from .tasks import TaskFile, remove_task_files
-
+from .step_executor import parse_shared_vars
 
 def collect_task_result(task_id, sos_dict, skipped=False, signature=None):
     shared = {}
@@ -390,7 +390,7 @@ del sos_handle_parameter_
     sig = None if env.config['sig_mode'] == 'ignore' or env.sos_dict['_output'].unspecified() else InMemorySignature(
         env.sos_dict['_input'], env.sos_dict['_output'],
         env.sos_dict['_depends'], env.sos_dict['__signature_vars__'],
-        share_vars='shared' in env.sos_dict['_runtime'])
+        shared_vars=parse_shared_vars(env.sos_dict['_runtime'].get('shared', None)))
 
     if sig and _validate_task_signature(sig, sig_content.get(task_id, {})):
         env.logger.info(f'{task_id} ``skipped``')

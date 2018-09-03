@@ -561,6 +561,8 @@ def reevaluate_output():
 
 def parse_shared_vars(option):
     shared_vars = set()
+    if not option:
+        return shared_vars
     if isinstance(option, str):
         shared_vars.add(option)
     elif isinstance(option, Mapping):
@@ -1211,7 +1213,7 @@ class Base_Step_Executor:
             raise RuntimeError(
                 f'Failed to get results for tasks {", ".join(x for x in self.proc_results if isinstance(x, str))}')
         #
-        for idx, task in enumerate(self.proc_results):
+        for idx, res in enumerate(self.proc_results):
             if 'skipped' in res:
                 if res['skipped']:
                     self.completed['__task_skipped__'] += 1
@@ -1427,7 +1429,7 @@ class Base_Step_Executor:
         self.proc_results = []
         self.vars_to_be_shared = set()
         if 'shared' in self.step.options:
-            self.vars_to_be_shared |= parse_shared_vars(self.step.options['shared'])
+            self.vars_to_be_shared = parse_shared_vars(self.step.options['shared'])
         self.vars_to_be_shared = sorted(list(self.vars_to_be_shared - {'step_output', 'step_input', 'step_depends'}))
         self.shared_vars = [{} for x in self._substeps]
         # run steps after input statement, which will be run multiple times for each input
