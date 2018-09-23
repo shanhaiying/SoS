@@ -291,8 +291,6 @@ class RuntimeEnvironments(object):
     verbosity:
         a verbosity level object that sets the verbosity level of the logger
 
-    logfile:
-        name of logfile for the logger. default to no logfile.
 
     '''
     _instance = None
@@ -314,7 +312,6 @@ class RuntimeEnvironments(object):
         # logger
         self._logger = None
         self._verbosity: int = 2
-        self._logfile = None
         self._set_logger()
         #
         # run mode, this mode controls how SoS actions behave
@@ -344,8 +341,6 @@ class RuntimeEnvironments(object):
         # parameters of the workflow, which will be handled differently
         self.parameter_vars = set()
         #
-        # maximum number of concurrent jobs
-        self.running_jobs: int = 0
         # this directory will be used by a lot of processes
         self.exec_dir = os.getcwd()
 
@@ -384,14 +379,7 @@ class RuntimeEnvironments(object):
         self._logger.addHandler(cout)
         self._logger.trace = lambda msg, * \
             args: self._logger._log(logging.TRACE, msg, args)
-        # output to a log file
-        if self._logfile is not None:
-            ch = logging.FileHandler(self._logfile, mode='a')
-            # debug informaiton and time is always written to the log file
-            ch.setLevel(logging.DEBUG)
-            ch.setFormatter(logging.Formatter(
-                '%(asctime)s: %(levelname)s: %(message)s'))
-            self._logger.addHandler(ch)
+
     #
     # attribute exec_dir
 
@@ -434,16 +422,7 @@ class RuntimeEnvironments(object):
             self._set_logger()
     #
     verbosity = property(lambda self: self._verbosity, _set_verbosity)
-    #
-    # attribute logfile
-    #
 
-    def _set_logfile(self, f):
-        self._logfile = f
-        # reset logger to include log file
-        self._set_logger()
-    #
-    logfile = property(lambda self: self._logfile, _set_logfile)
 
 
 # set up environment variable and a default logger
