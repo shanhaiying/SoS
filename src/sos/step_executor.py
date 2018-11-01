@@ -1361,7 +1361,7 @@ class Base_Step_Executor:
             for og in self.output_groups[1:]:
                 env.sos_dict['step_output'].extend(og)
             env.sos_dict['step_output'].dedup()
-
+            
             # now that output is settled, we can write remaining signatures
             for idx, res in enumerate(self.proc_results):
                 if pending_signatures[idx] is not None:

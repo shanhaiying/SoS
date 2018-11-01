@@ -101,7 +101,7 @@ class SoS_Worker(mp.Process):
         disconnect_controllers(env.zmq_context)
 
 
-    def run_workflow(self, workflow_id, wf, targets, args, shared, config):
+    def run_workflow(self, workflow_id, wf, targets, args, shared, config, concurrent):
         #
         #
         # get workflow, args, shared, and config
@@ -121,7 +121,7 @@ class SoS_Worker(mp.Process):
         # have to collect result here
         try:
             executer.run_as_nested(targets=targets, parent_socket=env.master_socket,
-                         my_workflow_id=workflow_id)
+                         my_workflow_id=workflow_id, concurrent=concurrent)
         except Exception as e:
             env.master_socket.send_pyobj(e)
 

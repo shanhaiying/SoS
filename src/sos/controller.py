@@ -113,6 +113,8 @@ class Controller(threading.Thread):
         # completed steps
         self._completed_steps = {}
 
+        self._pending_workflows = defaultdict(list)
+
         # substgep workers
         self._frontend_requests = []
         self._substep_workers = []
@@ -208,6 +210,9 @@ class Controller(threading.Thread):
                         else:  # untracked (no signature)
                             sys.stderr.write(f'\033[33m#\033[0m')
                     sys.stderr.flush()
+            elif msg[0] == 'pending_workflow':
+                self._pending_workflows[msg[1]].append(msg[2])
+                env.logger.error(f'penging {msg}')
             else:
                 raise RuntimeError(f'Unrecognized request {msg}')
         except Exception as e:
@@ -235,6 +240,10 @@ class Controller(threading.Thread):
             elif msg[0] == 'step_output':
                 self.ctl_req_socket.send_pyobj(
                     self._completed_steps.get(msg[1], None))
+            elif msg[0] == 'pending_workflows':
+                self.ctl_req_socket.send_pyobj(
+                    self._pending_workflows.pop(msg[1], None)
+                )
             elif msg[0] == 'done':
                 # handle all ctl_push_msgs #1062
                 while True:

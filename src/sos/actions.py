@@ -500,7 +500,7 @@ class SoS_ExecuteScript:
 
 
 @SoS_Action()
-def sos_run(workflow=None, targets=None, shared=None, args=None, source=None, **kwargs):
+def sos_run(workflow=None, targets=None, shared=None, args=None, source=None, concurrent=False, **kwargs):
     '''Execute a workflow from the current SoS script or a specified source
     (in .sos or .ipynb format), with _input as the initial input of workflow.'''
     if '__std_out__' in env.sos_dict and '__std_err__' in env.sos_dict:
@@ -550,7 +550,10 @@ def sos_run(workflow=None, targets=None, shared=None, args=None, source=None, **
         # really send the workflow
         shared = {
             x: (env.sos_dict[x] if x in env.sos_dict else None) for x in shared}
-        env.__socket__.send_pyobj((wf, targets, args, shared, env.config))
+        env.__socket__.send_pyobj((wf, targets, args, shared, env.config, concurrent))
+        # in case of concurrency, do not wait for result
+        if concurrent:
+            return
         res = env.__socket__.recv_pyobj()
         if res is None:
             sys.exit(0)
