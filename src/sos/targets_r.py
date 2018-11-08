@@ -44,6 +44,8 @@ class R_library(BaseTarget):
                 if version is not None:
                     raise ValueError(f"Specifying 'version=' option in addition to '{name}' is not allowed")
                 name, version = [x.strip() for x in name.split(opt, 1)]
+                if ',' in version:
+                    raise ValueError(f'SoS does not yet support multiple version comparisons. {version} provided')
                 version = (opt + version,)
                 break
         if version is not None:
@@ -178,7 +180,7 @@ class R_library(BaseTarget):
         else:
             # check if R is installed
             if not shutil.which('Rscript'):
-                env.logger.warning(f'Rscript: command not found')
+                env.logger.debug(f'Target R_Library("{self._library}") does not exist because command Rscript is not found.')
                 return False
             ret = self._install(self._library, self._version, self._repos)
             self.LIB_STATUS_CACHE[(self._library, self._version, self._autoinstall)] = ret

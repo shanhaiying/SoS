@@ -776,9 +776,9 @@ class Base_Executor:
                     | {'_input', '__step_output__', '__args__'}))
             node._context.update(svar)
         dag.update_step(runnable,
-                        env.sos_dict['__step_input__'],
-                        env.sos_dict['__step_output__'],
-                        env.sos_dict['__step_depends__'])
+                        input_targets = env.sos_dict['__step_input__'],
+                        output_targets = env.sos_dict['__step_output__'],
+                        depends_targets = env.sos_dict['__step_depends__'])
         runnable._status = 'completed'
         dag.save(env.config['output_dag'])
 
@@ -786,6 +786,9 @@ class Base_Executor:
         runnable._status = None
         dag.save(env.config['output_dag'])
         target = res.target
+
+        if isinstance(target, file_target) and (target + '.zapped').exists():
+            (target + '.zapped').unlink()
 
         if dag.regenerate_target(target):
             # runnable._depends_targets.append(target)
