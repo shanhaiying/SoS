@@ -307,54 +307,6 @@ e = d + 1
         self.assertEqual(env.sos_dict['shared'], 'c.txt')
         self.assertEqual(env.sos_dict['d'], 2)
 
-#
-#    def testCollectionOfErrors(self):
-#        '''Test collection of errors when running in dryrun mode.'''
-#        script = SoS_Script('''
-# [0]
-#depends: executable('a1')
-# [1: skip='blah']
-#depends: executable('a2')
-#
-# [2]
-#input: None
-#depends: executable('a3')
-# [3]
-#depends: executable('a4')
-#
-# ''')
-#        wf = script.workflow()
-#        # we should see a single error with 2 messages.
-#        # because 2 being on a separate branch will be executed but
-#        # the later steps will not be executed
-#        try:
-#            Base_Executor(wf).run(mode='dryrun')
-#        except Exception as e:
-#            self.assertEqual(len(e.errors), 3)
-
-    def testDynamicOutput(self):
-        '''Testing dynamic output'''
-        #
-        if not os.path.isdir('temp'):
-            os.mkdir('temp')
-        #
-        script = SoS_Script('''
-[10: shared={'test':'step_output'}]
-ofiles = []
-output: dynamic(ofiles)
-
-for i in range(4):
-    ff = 'temp/something{}.html'.format(i)
-    ofiles.append(ff)
-    with open(ff, 'w') as h:
-       h.write('a')
-''')
-        wf = script.workflow()
-        Base_Executor(wf).run()
-        self.assertEqual(env.sos_dict['test'], [
-                         'temp/something{}.html'.format(x) for x in range(4)])
-        #
-        shutil.rmtree('temp')
 
 
 if __name__ == '__main__':
