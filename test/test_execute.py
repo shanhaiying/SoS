@@ -1185,6 +1185,33 @@ run: expand=True
                 file_target(tfile).unlink()
 
 
+    def testOutputReport(self):
+        '''Test generation of report'''
+        if os.path.isfile('report.html'):
+            os.remove('report.html')
+        script = SoS_Script(r"""
+[1: shared = {'dfile':'_output'}]
+output: '1.txt'
+run:
+	echo 1 > 1.txt
+
+[2: shared = {'ifile':'_output'}]
+output: '2.txt'
+run: expand=True
+	echo {_input} > 2.txt
+
+[3]
+depends: ifile
+input: dfile
+output: '3.txt'
+run: expand=True
+	cat {_input} > {_output}
+""")
+        env.config['output_report'] = 'report.html'
+        wf = script.workflow()
+        Base_Executor(wf).run()
+        self.assertTrue(os.path.isfile('report.html'))
+
     @unittest.skipIf(sys.platform == 'win32', 'Graphviz not available under windows')
     def testOutputReportWithDAG(self):
         # test dag
