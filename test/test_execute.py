@@ -1184,6 +1184,173 @@ run: expand=True
             if file_target(tfile).exists():
                 file_target(tfile).unlink()
 
+    def testConcurrentInputOption(self):
+        '''Test input option'''
+        self.touch(['1.txt', '2.txt'])
+        script = SoS_Script('''
+[1]
+n =[str(x) for x in range(2)]
+input: [f'{x+1}.txt' for x in range(2)], paired_with = 'n', concurrent = True
+run: expand = True
+  echo {_n} {_input}
+''')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+
+    def testNonExistentDependentTarget(self):
+        '''Test non existent dependent targets'''
+        script = SoS_Script(r"""
+[1]
+
+[2]
+depends: sos_step('wrong')
+""")
+        wf = script.workflow()
+        self.assertRaises(Exception, Base_Executor(wf).run)
+        #
+        script = SoS_Script(r"""
+[1]
+
+[2]
+depends: 'non-existent.txt'
+""")
+        wf = script.workflow()
+        self.assertRaises(Exception, Base_Executor(wf).run)
+
+    def testExecuteIPynb(self):
+        '''Test extracting and executing workflow from .ipynb files'''
+        script = SoS_Script(filename='sample_workflow.ipynb')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+
+    def testOutputReport(self):
+        '''Test generation of report'''
+        if os.path.isfile('report.html'):
+            os.remove('report.html')
+        script = SoS_Script(r"""
+[1: shared = {'dfile':'_output'}]
+output: '1.txt'
+run:
+	echo 1 > 1.txt
+
+[2: shared = {'ifile':'_output'}]
+output: '2.txt'
+run: expand=True
+	echo {_input} > 2.txt
+
+[3]
+depends: ifile
+input: dfile
+output: '3.txt'
+run: expand=True
+	cat {_input} > {_output}
+""")
+        env.config['output_report'] = 'report.html'
+        wf = script.workflow()
+        Base_Executor(wf).run()
+        self.assertTrue(os.path.isfile('report.html'))
+
+    @unittest.skipIf(sys.platform == 'win32', 'Graphviz not available under windows')
+    def testOutputReportWithDAG(self):
+        # test dag
+        if os.path.isfile('report.html'):
+            os.remove('report.html')
+        script = SoS_Script(r"""
+[1: shared = {'dfile':'_output'}]
+output: '1.txt'
+run:
+	echo 1 > 1.txt
+
+[2: shared = {'ifile':'_output'}]
+output: '2.txt'
+run: expand=True
+	echo {_input} > 2.txt
+
+[3]
+depends: ifile
+input: dfile
+output: '4.txt'
+run: expand=True
+	cat {_input} > {_output}
+""")
+        env.config['output_report'] = 'report.html'
+        env.config['output_dag'] = 'report.dag'
+        wf = script.workflow()
+        Base_Executor(wf).run()
+        with open('report.html') as rep:
+            content = rep.read()
+        self.assertTrue('Execution DAG' in content)
+
+    def testSoSStepWithOutput(self):
+        '''Test checking output of sos_step #981'''
+        script = SoS_Script('''
+[step]
+output: 'a'
+sh:
+touch a
+
+[default]
+depends: sos_step('step')
+''')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+
+    def testMultiSoSStep(self):
+        '''Test matching 'a_1', 'a_2' etc with sos_step('a')'''
+        for file in ('a_1', 'a_2'):
+            if file_target(file).exists():
+                file_target(file).unlink()
+        script = SoS_Script('''
+[a_b_1]
+output: "a_1"
+sh:
+  echo whatever > a_1
+
+[a_b_2]
+output: "a_2"
+sh: expand=True
+  cp {_input} {_output}
+
+[default]
+depends: sos_step('a_b')
+''')
+        wf = script.workflow()
+        res = Base_Executor(wf).run()
+        self.assertEqual(res['__completed__']['__step_completed__'], 3)
+        self.assertTrue(os.path.isfile('a_1'))
+        self.assertTrue(os.path.isfile('a_2'))
+        with open('a_1') as a1, open('a_2') as a2:
+            self.assertEqual(a1.read(), a2.read())
+
+    def testDependsAuxiAndForward(self):
+        '''Test depends on auxiliary, which then depends on a forward-workflow #983'''
+        for f in ('a_1', 'a_2'):
+            if file_target(f).exists():
+                file_target(f).unlink()
+        script = SoS_Script('''
+
+[hg_1]
+output: 'a_1'
+sh:
+  echo "something" > a_1
+
+[hg_2]
+
+[star: provides = "a_2"]
+depends: sos_step('hg')
+sh:
+  cp  a_1 a_2
+
+[default]
+depends: "a_2"
+        ''')
+        wf = script.workflow()
+        res = Base_Executor(wf).run()
+        self.assertEqual(res['__completed__']['__step_completed__'], 4)
+        self.assertTrue(os.path.isfile('a_1'))
+        self.assertTrue(os.path.isfile('a_2'))
+        with open('a_1') as a1, open('a_2') as a2:
+            self.assertEqual(a1.read(), a2.read())
 
 
     def testMultiDepends(self):
