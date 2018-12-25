@@ -1184,6 +1184,19 @@ run: expand=True
             if file_target(tfile).exists():
                 file_target(tfile).unlink()
 
+    def testConcurrentInputOption(self):
+        '''Test input option'''
+        self.touch(['1.txt', '2.txt'])
+        script = SoS_Script('''
+[1]
+n =[str(x) for x in range(2)]
+input: [f'{x+1}.txt' for x in range(2)], paired_with = 'n', concurrent = True
+run: expand = True
+  echo {_n} {_input}
+''')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+
     def testNonExistentDependentTarget(self):
         '''Test non existent dependent targets'''
         script = SoS_Script(r"""
