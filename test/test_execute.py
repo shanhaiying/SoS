@@ -1198,12 +1198,6 @@ run: expand = True
         Base_Executor(wf).run()
 
 
-    def testExecuteIPynb(self):
-        '''Test extracting and executing workflow from .ipynb files'''
-        script = SoS_Script(filename='sample_workflow.ipynb')
-        wf = script.workflow()
-        Base_Executor(wf).run()
-
     def testOutputReport(self):
         '''Test generation of report'''
         if os.path.isfile('report.html'):
