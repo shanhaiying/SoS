@@ -1185,6 +1185,20 @@ run: expand=True
                 file_target(tfile).unlink()
 
 
+    def testSoSStepWithOutput(self):
+        '''Test checking output of sos_step #981'''
+        script = SoS_Script('''
+[step]
+output: 'a'
+sh:
+touch a
+
+[default]
+depends: sos_step('step')
+''')
+        wf = script.workflow()
+        Base_Executor(wf).run()
+
     def testMultiSoSStep(self):
         '''Test matching 'a_1', 'a_2' etc with sos_step('a')'''
         for file in ('a_1', 'a_2'):
