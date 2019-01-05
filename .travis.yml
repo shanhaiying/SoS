@@ -61,12 +61,17 @@ services:
     - docker
 install: "pip install ."
 before_script:
+    - ps aux | grep -v root
     - cd test
     - sh build_test_docker.sh
 script:
-    - pytest -x -v --cov sos --cov-config ../.coveragerc --cov-report=xml;
+    - for t in test*.py; do pytest -x -v --cov sos --cov-config ../.coveragerc --cov-report=xml $t && ps aux | grep -v root && echo `ps aux | grep -v root | wc -l` 
+; done
+    - ps aux | grep -v root
 
 after_success:
+    - ps aux | grep -v root
+    - echo `ps aux | grep -v root | wc -l` 
     - coverage combine;
     - coveralls
 
